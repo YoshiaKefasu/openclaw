@@ -138,6 +138,7 @@ export function handleMessageUpdate(
       final: false,
       inlineCode: createInlineCodeState(),
       buffer: "",
+      customHeaderThinking: false,
     })
     .trim();
   if (next) {
@@ -232,7 +233,12 @@ export function handleMessageEnd(
   });
 
   const text = resolveSilentReplyFallbackText({
-    text: ctx.stripBlockTags(rawText, { thinking: false, final: false, buffer: "" }),
+    text: ctx.stripBlockTags(rawText, {
+      thinking: false,
+      final: false,
+      buffer: "",
+      customHeaderThinking: false,
+    }),
     messagingToolSentTexts: ctx.state.messagingToolSentTexts,
   });
   const rawThinking =
