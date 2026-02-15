@@ -48,8 +48,8 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     deltaBuffer: "",
     blockBuffer: "",
     // Track if a streamed chunk opened a <think> block (stateful across chunks).
-    blockState: { thinking: false, final: false, inlineCode: createInlineCodeState() },
-    partialBlockState: { thinking: false, final: false, inlineCode: createInlineCodeState() },
+    blockState: { thinking: false, final: false, inlineCode: createInlineCodeState(), buffer: "" },
+    partialBlockState: { thinking: false, final: false, inlineCode: createInlineCodeState(), buffer: "" },
     lastStreamedAssistant: undefined,
     lastStreamedAssistantCleaned: undefined,
     emittedAssistantUpdate: false,
@@ -349,34 +349,65 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
 
   const stripBlockTags = (
     text: string,
-    state: { thinking: boolean; final: boolean; inlineCode?: InlineCodeState },
+    state: { thinking: boolean; final: boolean; inlineCode?: InlineCodeState; buffer: string },
   ): string => {
-    if (!text) {
-      return text;
+    // 0. Handle buffering for split tags
+    let processingText = (state.buffer || "") + (text || "");
+    state.buffer = "";
+    
+    if (!processingText) {
+      return "";
+    }
+    
+    // Check for potential partial tag at end (e.g. "<thi", "<think id=")
+    // Only buffer if it's plausibly a tag we care about (starts with <)
+    // and is not inside a code block.
+    const lastOpenIndex = processingText.lastIndexOf("<");
+    if (lastOpenIndex !== -1 && processingText.length - lastOpenIndex < 200) {
+      // Check if it's closed
+      const hasClose = processingText.indexOf(">", lastOpenIndex) !== -1;
+      if (!hasClose) {
+        // It's open. Check if it's inside code.
+        const checkState = state.inlineCode ?? createInlineCodeState();
+        // we need to clone checkState because buildCodeSpanIndex might not be side-effect free? 
+        // actually buildCodeSpanIndex returns new state, doesn't mutate input.
+        const tempSpans = buildCodeSpanIndex(processingText, checkState);
+        
+        if (!tempSpans.isInside(lastOpenIndex)) {
+             // It is a candidate for buffering.
+             state.buffer = processingText.slice(lastOpenIndex);
+             processingText = processingText.slice(0, lastOpenIndex);
+        }
+      }
+    }
+
+    if (!processingText && state.buffer) {
+        // We buffered everything
+        return "";
     }
 
     const inlineStateStart = state.inlineCode ?? createInlineCodeState();
-    const codeSpans = buildCodeSpanIndex(text, inlineStateStart);
+    const codeSpans = buildCodeSpanIndex(processingText, inlineStateStart);
 
     // 1. Handle <think> blocks (stateful, strip content inside)
     let processed = "";
     THINKING_TAG_SCAN_RE.lastIndex = 0;
     let lastIndex = 0;
     let inThinking = state.thinking;
-    for (const match of text.matchAll(THINKING_TAG_SCAN_RE)) {
+    for (const match of processingText.matchAll(THINKING_TAG_SCAN_RE)) {
       const idx = match.index ?? 0;
       if (codeSpans.isInside(idx)) {
         continue;
       }
       if (!inThinking) {
-        processed += text.slice(lastIndex, idx);
+        processed += processingText.slice(lastIndex, idx);
       }
       const isClose = match[1] === "/";
       inThinking = !isClose;
       lastIndex = idx + match[0].length;
     }
     if (!inThinking) {
-      processed += text.slice(lastIndex);
+      processed += processingText.slice(lastIndex);
     }
     state.thinking = inThinking;
 
