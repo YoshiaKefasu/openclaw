@@ -381,7 +381,27 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     // Check for partial custom headers
     if (text.length > 0) {
       const tail = text.slice(-15);
-      const keywords = ["Thinking:", "Analysis:", "Output:"];
+      const keywords = [
+        "Thinking:",
+        "Analysis:",
+        "Output:",
+        "**Thinking",
+        "**Analysis",
+        "**Plan",
+        "**Verifying",
+        "**Checking",
+        "**Context",
+        "**Diagnosis",
+        "**Investigation",
+        "# Thinking",
+        "# Analysis",
+        "# Plan",
+        "# Verifying",
+        "# Checking",
+        "# Context",
+        "# Diagnosis",
+        "# Investigation",
+      ];
       for (const kw of keywords) {
         for (let len = 1; len < kw.length; len++) {
           const sub = kw.slice(0, len);
@@ -407,7 +427,8 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     state: { customHeaderThinking: boolean },
     inlineStateStart: InlineCodeState,
   ): string => {
-    const START_HEADER_RE = /(Thinking:|Analysis:)\s*/g;
+    const START_HEADER_RE =
+      /(?:^|\n|\s)((?:(?:\*\*|#)\s*(?:Thinking|Analysis|Plan|Verifying|Checking|Context|Diagnosis|Investigation)\b.*?(?:\*\*|#|:)?)|Thinking:|Analysis:)\s*/gi;
     const END_HEADER_RE = /(?:^|\n)(Output:)\s*/g;
 
     let processingText = text;
@@ -465,12 +486,28 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
         START_HEADER_RE.lastIndex = 0;
         while ((startMatch = START_HEADER_RE.exec(textToScan)) !== null) {
           const idx = startMatch.index;
-          if (idx > 0) {
+
+          const matchedText = startMatch[0];
+          const matchedGroup = startMatch[1] || matchedText;
+
+          // 1. If strict "Thinking:" style, check preceding char
+          if (
+            (matchedGroup.startsWith("Thinking:") || matchedGroup.startsWith("Analysis:")) &&
+            idx > 0
+          ) {
             const charBefore = textToScan[idx - 1];
             if (charBefore !== "\n" && charBefore !== " ") {
               continue;
             }
           }
+
+          // 2. If Markdown style (**Thinking**), require start of chunk or newline
+          if (matchedGroup.startsWith("*") || matchedGroup.startsWith("#")) {
+            if (idx > 0 && textToScan[idx - 1] !== "\n") {
+              continue;
+            }
+          }
+
           if (!currentSpans.isInside(idx)) {
             const start = idx;
             finalOutput += textToScan.slice(0, start);
