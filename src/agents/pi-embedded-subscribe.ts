@@ -363,9 +363,15 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
 
   const detectPartialTagsOrHeaders = (text: string): boolean => {
     // 1. Partial <think> tags
-    if (/<(?:think|thin|thi|th|t)?$/i.test(text)) return true; // <, <t, <th, ...
-    if (/(?:^|\n)O(?:utput|utpu|utp|ut|u)?$/i.test(text)) return true; // Output partial
-    if (/Output:?$/i.test(text)) return true; // strict output check
+    if (/<(?:think|thin|thi|th|t)?$/i.test(text)) {
+      return true;
+    } // <, <t, <th, ...
+    if (/(?:^|\n)O(?:utput|utpu|utp|ut|u)?$/i.test(text)) {
+      return true;
+    } // Output partial
+    if (/Output:?$/i.test(text)) {
+      return true;
+    } // strict output check
 
     // 2. Partial Markdown headers (**, #) at Start of Message/Line
     // We generalize this: If we are at the start and see "**" or "#", we wait.
@@ -381,8 +387,12 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
 
     // 3. Partial "Standard" headers (Thinking:)
-    if (/(?:^|\n)T(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?)?)?)?$/.test(text)) return true;
-    if (/(?:^|\n)A(?:n(?:a(?:l(?:y(?:s(?:i(?:s)?)?)?)?)?)?)?$/.test(text)) return true;
+    if (/(?:^|\n)T(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?)?)?)?$/.test(text)) {
+      return true;
+    }
+    if (/(?:^|\n)A(?:n(?:a(?:l(?:y(?:s(?:i(?:s)?)?)?)?)?)?)?$/.test(text)) {
+      return true;
+    }
 
     return false;
   };
