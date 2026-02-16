@@ -132,7 +132,9 @@ export function handleMessageUpdate(
     ctx.emitReasoningStream(extractThinkingFromTaggedStream(ctx.state.deltaBuffer));
   }
 
-  const next = ctx.stripBlockTags(ctx.state.deltaBuffer, ctx.state.blockState).trim();
+  const cleanedChunk = ctx.stripBlockTags(chunk, ctx.state.blockState);
+  ctx.state.cleanedDeltaBuffer += cleanedChunk;
+  const next = ctx.state.cleanedDeltaBuffer.trim();
   if (next) {
     const visibleDelta = chunk ? ctx.stripBlockTags(chunk, ctx.state.partialBlockState) : "";
     const parsedDelta = visibleDelta ? ctx.consumePartialReplyDirectives(visibleDelta) : null;
@@ -383,6 +385,7 @@ export function handleMessageEnd(
   }
 
   ctx.state.deltaBuffer = "";
+  ctx.state.cleanedDeltaBuffer = "";
   ctx.state.blockBuffer = "";
   ctx.blockChunker?.reset();
   ctx.state.blockState.thinking = false;

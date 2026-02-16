@@ -44,6 +44,7 @@ export type EmbeddedPiSubscribeState = {
   streamReasoning: boolean;
 
   deltaBuffer: string;
+  cleanedDeltaBuffer: string;
   blockBuffer: string;
   blockState: {
     thinking: boolean;
