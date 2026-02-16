@@ -116,13 +116,9 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     state.blockState.thinking = false;
     state.blockState.final = false;
     state.blockState.inlineCode = createInlineCodeState();
-    state.blockState.buffer = "";
-    state.blockState.customHeaderThinking = false;
     state.partialBlockState.thinking = false;
     state.partialBlockState.final = false;
     state.partialBlockState.inlineCode = createInlineCodeState();
-    state.partialBlockState.buffer = "";
-    state.partialBlockState.customHeaderThinking = false;
     state.lastStreamedAssistant = undefined;
     state.lastStreamedAssistantCleaned = undefined;
     state.emittedAssistantUpdate = false;
@@ -385,7 +381,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       const tail = text.slice(-15);
       const keywords = ["Thinking:", "Analysis:", "Output:"];
       for (const kw of keywords) {
-        for (let len = 3; len < kw.length; len++) {
+        for (let len = 1; len < kw.length; len++) {
           const sub = kw.slice(0, len);
           if (tail.endsWith(sub)) {
             const matchStartInfo = text.length - len;
@@ -409,7 +405,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     state: { customHeaderThinking: boolean },
     inlineStateStart: InlineCodeState,
   ): string => {
-    const START_HEADER_RE = /(^|[\s\n])(Thinking:|Analysis:)\s*/g;
+    const START_HEADER_RE = /(Thinking:|Analysis:)\s*/g;
     const END_HEADER_RE = /(?:^|\n)(Output:)\s*/g;
 
     let processingText = text;
@@ -466,9 +462,16 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
         let found = false;
         START_HEADER_RE.lastIndex = 0;
         while ((startMatch = START_HEADER_RE.exec(textToScan)) !== null) {
-          if (!currentSpans.isInside(startMatch.index)) {
-            const start = startMatch.index;
-            finalOutput += textToScan.slice(0, start) + (startMatch[1] || "");
+          const idx = startMatch.index;
+          if (idx > 0) {
+            const charBefore = textToScan[idx - 1];
+            if (charBefore !== "\n" && charBefore !== " ") {
+              continue;
+            }
+          }
+          if (!currentSpans.isInside(idx)) {
+            const start = idx;
+            finalOutput += textToScan.slice(0, start);
             const consumed = startMatch[0].length;
             textToScan = textToScan.slice(start + consumed);
             state.customHeaderThinking = true;

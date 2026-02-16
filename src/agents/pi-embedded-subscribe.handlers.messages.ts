@@ -132,15 +132,7 @@ export function handleMessageUpdate(
     ctx.emitReasoningStream(extractThinkingFromTaggedStream(ctx.state.deltaBuffer));
   }
 
-  const next = ctx
-    .stripBlockTags(ctx.state.deltaBuffer, {
-      thinking: false,
-      final: false,
-      inlineCode: createInlineCodeState(),
-      buffer: "",
-      customHeaderThinking: false,
-    })
-    .trim();
+  const next = ctx.stripBlockTags(ctx.state.deltaBuffer, ctx.state.blockState).trim();
   if (next) {
     const visibleDelta = chunk ? ctx.stripBlockTags(chunk, ctx.state.partialBlockState) : "";
     const parsedDelta = visibleDelta ? ctx.consumePartialReplyDirectives(visibleDelta) : null;

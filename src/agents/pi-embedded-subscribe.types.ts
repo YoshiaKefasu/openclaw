@@ -35,6 +35,7 @@ export type SubscribeEmbeddedPiSessionParams = {
   enforceFinalTag?: boolean;
   config?: OpenClawConfig;
   sessionKey?: string;
+  storePath?: string;
 };
 
 export type { BlockReplyChunking } from "./pi-embedded-block-chunker.js";
