@@ -361,65 +361,30 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
   };
 
-  const detectPartialTagsOrHeaders = (
-    text: string,
-    inlineCode?: InlineCodeState,
-  ): string | null => {
-    // Check for potential partial tag at end
-    const lastOpenIndex = text.lastIndexOf("<");
-    if (lastOpenIndex !== -1 && text.length - lastOpenIndex < 200) {
-      const hasClose = text.indexOf(">", lastOpenIndex) !== -1;
-      if (!hasClose) {
-        const checkState = inlineCode ?? createInlineCodeState();
-        const tempSpans = buildCodeSpanIndex(text, checkState);
-        if (!tempSpans.isInside(lastOpenIndex)) {
-          return text.slice(lastOpenIndex);
-        }
+  const detectPartialTagsOrHeaders = (text: string): boolean => {
+    // 1. Partial <think> tags
+    if (/<(?:think|thin|thi|th|t)?$/i.test(text)) return true; // <, <t, <th, ...
+    if (/(?:^|\n)O(?:utput|utpu|utp|ut|u)?$/i.test(text)) return true; // Output partial
+    if (/Output:?$/i.test(text)) return true; // strict output check
+
+    // 2. Partial Markdown headers (**, #) at Start of Message/Line
+    // We generalize this: If we are at the start and see "**" or "#", we wait.
+    // We wait for at least one full word + boundary to decide.
+    // Matches: ^**, ^**Ver, ^# Ge
+    if (/(?:^|\n)(?:\*\*|#)\s*(?:[A-Za-z]*)$/.test(text)) {
+      // Limit buffer length to avoid hanging on long bold sentences.
+      // A header shouldn't be massive.
+      const match = text.match(/(?:^|\n)((?:\*\*|#)\s*[A-Za-z]*)$/);
+      if (match && match[1].length < 30) {
+        return true;
       }
     }
 
-    // Check for partial custom headers
-    if (text.length > 0) {
-      const tail = text.slice(-15);
-      const keywords = [
-        "Thinking:",
-        "Analysis:",
-        "Output:",
-        "**Thinking",
-        "**Analysis",
-        "**Plan",
-        "**Verifying",
-        "**Checking",
-        "**Context",
-        "**Diagnosis",
-        "**Investigation",
-        "# Thinking",
-        "# Analysis",
-        "# Plan",
-        "# Verifying",
-        "# Checking",
-        "# Context",
-        "# Diagnosis",
-        "# Investigation",
-      ];
-      for (const kw of keywords) {
-        for (let len = 1; len < kw.length; len++) {
-          const sub = kw.slice(0, len);
-          if (tail.endsWith(sub)) {
-            const matchStartInfo = text.length - len;
-            const charBefore = matchStartInfo > 0 ? text[matchStartInfo - 1] : "\n";
-            if (charBefore === "\n" || charBefore === " " || matchStartInfo === 0) {
-              const checkState = inlineCode ?? createInlineCodeState();
-              const tempSpans = buildCodeSpanIndex(text, checkState);
-              if (!tempSpans.isInside(matchStartInfo)) {
-                return text.slice(matchStartInfo);
-              }
-            }
-          }
-        }
-      }
-    }
-    return null;
+    // 3. Partial "Standard" headers (Thinking:)
+    if (/(?:^|\n)T(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?)?)?)?$/.test(text)) return true;
+    if (/(?:^|\n)A(?:n(?:a(?:l(?:y(?:s(?:i(?:s)?)?)?)?)?)?)?$/.test(text)) return true;
+
+    return false;
   };
 
   const stripCustomThinkingHeaders = (
@@ -427,11 +392,13 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     state: { customHeaderThinking: boolean },
     inlineStateStart: InlineCodeState,
   ): string => {
-    // Sharp Regex:
-    // Group 1 (Markdown): Matches **Thinking**, # Analysis. Enforces start-of-line/message (?:^|\n).
-    // Group 2 (Standard): Matches Thinking:, Analysis:. Allows preceding space (?:^|\n|\s).
+    // Smart Regex:
+    // Group 1 (Markdown): Matches **Verb-ing** or specific Nouns.
+    //    - Start anchor: (?:^|\n)
+    //    - Keywords: [A-Z][a-z]+ing (Creating, Testing, Verifying, etc) OR Analysis, Plan, etc.
+    // Group 2 (Standard): Thinking:, Analysis:
     const START_HEADER_RE =
-      /(?:(?:^|\n)(?:\*\*|#)\s*(?:Thinking|Analysis|Plan|Verifying|Checking|Context|Diagnosis|Investigation)\b.*?(?:\*\*|#|:)?\s*)|(?:(?:^|\n|\s)(?:Thinking:|Analysis:)\s*)/gi;
+      /(?:(?:^|\n)(?:\*\*|#)\s*(?:[A-Z][a-z]+ing|Analysis|Plan|Step|Context|Final|Diagnosis|Investigation)\b.*?(?:\*\*|#|:)?\s*)|(?:(?:^|\n|\s)(?:Thinking:|Analysis:)\s*)/gi;
     const END_HEADER_RE = /(?:^|\n)(Output:)\s*/g;
 
     let processingText = text;
@@ -532,11 +499,10 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
 
     // Check for partial tags or custom headers at end of chunk
-    const partialBuffer = detectPartialTagsOrHeaders(processingText, state.inlineCode);
-    if (partialBuffer) {
-      const splitIdx = processingText.length - partialBuffer.length;
-      state.buffer = partialBuffer;
-      processingText = processingText.slice(0, splitIdx);
+    const shouldBuffer = detectPartialTagsOrHeaders(processingText);
+    if (shouldBuffer) {
+      state.buffer = processingText;
+      return "";
     }
 
     if (!processingText && state.buffer) {
